@@ -220,11 +220,12 @@ class UserProfileResource(ModelResource):
     def dehydrate(self, bundle):
         user = bundle.obj.user
         bundle.data['username'] = user.username
+        bundle.data['first_name'] = user.first_name
+        bundle.data['last_name'] = user.last_name
         bundle.data['email'] = user.email
         bundle.data['date_joined'] = user.date_joined
         bundle.data['last_login'] = user.last_login
         return bundle
-
 
     def authorized_read_list(self, object_list, bundle):
         # return all objects if super user
