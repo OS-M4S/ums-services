@@ -116,6 +116,7 @@ class CreateUserResource(ModelResource):
 
 
 class UserResource(ModelResource):
+    # userprofile = fields.ToOneField("users.resources.UserProfileResource", attribute='userprofile', related_name='user', blank=True, null=True, full=True) 
     raw_password = fields.CharField(attribute=None, readonly=True, blank=True, null=True)
 
     class Meta:
@@ -125,7 +126,7 @@ class UserResource(ModelResource):
         allowed_methods = ['get', 'patch', 'put', ]
         always_return_data = True
         queryset = User.objects.all().select_related('api_key')
-        excludes = ['is_active', 'is_staff', 'is_superuser', 'date_joined', 'last_login']
+        excludes = ['is_active', 'is_staff', 'is_superuser', 'date_joined', 'last_login', 'password']
         resource_name = 'user'
 
     def override_urls(self):
@@ -152,19 +153,18 @@ class UserResource(ModelResource):
             # https://github.com/toastdriven/django-tastypie/issues/603
             # "Cannot resolve keyword 'raw_password' into field." won't occur
 
-            print bundle.data
+            # print bundle.data
             # print bundle.data['user']['raw_password']
             rp = bundle.data["raw_password"]
             del bundle.data['raw_password']
             bundle.data["password"] = make_password(rp)
-            print bundle.data
+            # print bundle.data
         return bundle
 
     def dehydrate(self, bundle):
         bundle.data['key'] = bundle.obj.api_key.key
         try:
             del bundle.data['raw_password']
-            del bundle.data['password']
         except KeyError:
             print 'KeyError'
         return bundle
@@ -178,14 +178,11 @@ class UserResource(ModelResource):
 
     def login(self, request, **kwargs):
         self.method_check(request, allowed=['post'])
-
         data = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
         username = data.get('username', '')
         password = data.get('password', '')
         user = authenticate(username=username, password=password)
         if user:
-            print user.first_name
-            print user.last_name
             if user.is_active:
                 login(request, user)
                 return self.create_response(request, {
@@ -209,6 +206,7 @@ class UserResource(ModelResource):
 
 
 class UserProfileResource(ModelResource):
+
     class Meta:
         queryset = UserProfile.objects.all()
         authentication = MultiAuthentication(BasicAuthentication(), ApiKeyAuthentication())
@@ -218,6 +216,15 @@ class UserProfileResource(ModelResource):
         allowed_methods = ['get', 'patch', ]
         detail_allowed_methods = ['get', 'patch', 'put']
         resource_name = 'userprofile'
+
+    def dehydrate(self, bundle):
+        user = bundle.obj.user
+        bundle.data['username'] = user.username
+        bundle.data['email'] = user.email
+        bundle.data['date_joined'] = user.date_joined
+        bundle.data['last_login'] = user.last_login
+        return bundle
+
 
     def authorized_read_list(self, object_list, bundle):
         # return all objects if super user
