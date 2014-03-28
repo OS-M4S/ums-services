@@ -219,16 +219,26 @@ class UserProfileResource(ModelResource):
         detail_allowed_methods = ['get', 'patch', 'put']
         resource_name = 'userprofile'
 
-    # def authorized_read_list(self, object_list, bundle):
-    #     return object_list.filter(user=bundle.request.user).select_related()
+    def authorized_read_list(self, object_list, bundle):
+        # return all objects if super user
+        # return profile details otherwise
+        if not bundle.request.user.is_superuser:
+            return object_list.filter(user=bundle.request.user).select_related()
+        return object_list
 
-    ## Since there is only one user profile object, call get_detail instead
     def get_list(self, request, **kwargs):
         try:
-            kwargs["pk"] = request.user.profile.pk
+            if request.user.is_superuser:
+                return super(UserProfileResource, self).get_list(request, **kwargs)
+            else:
+                kwargs["pk"] = request.user.profile.pk
+                return super(UserProfileResource, self).get_detail(request, **kwargs)
         except:
             print 'User has no profile'
-        return super(UserProfileResource, self).get_detail(request, **kwargs)
+            return self.create_response(request, {
+                'success': False,
+                'reason' : 'not allowed'
+            })
 
 
 ###############################################################################
