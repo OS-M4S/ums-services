@@ -1,2 +1,1 @@
-Login module for openm4s
-
+Login system for OpenM4S
