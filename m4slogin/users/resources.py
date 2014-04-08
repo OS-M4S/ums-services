@@ -66,70 +66,67 @@ class CreateUserResource(ModelResource):
         return bundle
 
     def obj_create(self, bundle, **kwargs):
-        try:
-            # validate username
-            username = bundle.data["user"]["username"]
-            if User.objects.filter(username=username):
-                raise CustomBadRequest(
-                    code="duplicate_exception",
-                    message="That username is already used.")
-            # validate user email
-            email = bundle.data["user"]["email"]
-            if User.objects.filter(email=email):
-                raise CustomBadRequest(
-                    code="duplicate_exception",
-                    message="That email is already used.")
-            # validate password
-            rp = bundle.data["user"]["raw_password"]
-            self.validate_password(rp)
-        except KeyError as missing_key:
-            raise CustomBadRequest(
-                code="missing_key",
-                message="Must provide {missing_key} when creating a user."
-                        .format(missing_key=missing_key))
-        except User.DoesNotExist:
-            print 'Error Error'
+        # try:
+        #     # validate username
+        #     username = bundle.data["user"]["username"]
+        #     if User.objects.filter(username=username):
+        #         raise CustomBadRequest(
+        #             code="duplicate_exception",
+        #             message="That username is already used.")
+        #     # validate user email
+        #     email = bundle.data["user"]["email"]
+        #     if User.objects.filter(email=email):
+        #         raise CustomBadRequest(
+        #             code="duplicate_exception",
+        #             message="That email is already used.")
+        # except KeyError as missing_key:
+        #     raise CustomBadRequest(
+        #         code="missing_key",
+        #         message="Must provide {missing_key} when creating a user."
+        #                 .format(missing_key=missing_key))
+        # except User.DoesNotExist:
+        #     print 'Error Error'
         # setting resource_name to `user_profile` here because we want
         # resource_uri in response to be same as UserProfileResource resource
         self._meta.resource_name = UserProfileResource._meta.resource_name
         return super(CreateUserResource, self).obj_create(bundle, **kwargs)
 
-    def validate_password(self, password):
-        if re.match(REGEX_VALID_PASSWORD, password):
-            return True
-        # Todo fix this
-        if len(password) < MINIMUM_PASSWORD_LENGTH:
-            raise CustomBadRequest(
-                code="invalid_password",
-                message=(
-                    "Your password should contain at least {length} "
-                    "characters.".format(length=MINIMUM_PASSWORD_LENGTH)))
+################################################################################
+################################################################################
+
+def validate_password(password):
+    if re.match(REGEX_VALID_PASSWORD, password):
+        return True
+    # Todo fix this
+    if len(password) < MINIMUM_PASSWORD_LENGTH:
         raise CustomBadRequest(
             code="invalid_password",
-            message=("Your password should contain at least one number"
-                     ", one uppercase letter, one special character,"
-                     " and no spaces."))
-        return False
+            message=(
+                "Your password should contain at least {length} "
+                "characters.".format(length=MINIMUM_PASSWORD_LENGTH)))
+    raise CustomBadRequest(
+        code="invalid_password",
+        message=("Your password should contain at least one number"
+                 ", one uppercase letter, one special character,"
+                 " and no spaces."))
+    return False
 
 ################################################################################
-################################################################################
-
 
 class UserResource(ModelResource):
-    # userprofile = fields.ToOneField("users.resources.UserProfileResource", attribute='userprofile', related_name='user', blank=True, null=True, full=True) 
     raw_password = fields.CharField(attribute=None, readonly=True, blank=True, null=True)
 
     class Meta:
         authentication = MultiAuthentication(BasicAuthentication(), ApiKeyAuthentication())
         # authentication = ApiKeyAuthentication()
         authorization = Authorization()
-        allowed_methods = ['get', 'patch', 'put', ]
+        allowed_methods = ['put', ]
         always_return_data = True
         queryset = User.objects.all().select_related('api_key')
-        excludes = ['is_active', 'is_staff', 'is_superuser', 'date_joined', 'last_login', 'password']
+        excludes = ['is_active', 'is_staff', 'is_superuser', 'date_joined', 'last_login']
         resource_name = 'user'
 
-    def override_urls(self):
+    def prepend_urls(self):
         return [
             url(r"^(?P<resource_name>%s)/login%s$" %
                 (self._meta.resource_name, trailing_slash()),
@@ -139,13 +136,37 @@ class UserResource(ModelResource):
                 self.wrap_view('logout'), name='api_logout'),
         ]
 
-    # def authorized_read_list(self, object_list, bundle):
-    #     return object_list.filter(id=bundle.request.user.id).select_related()
+    def authorized_read_list(self, object_list, bundle):
+        return object_list.filter(id=bundle.request.user.id).select_related()
 
+    def obj_update(self, bundle, request=None, **kwargs):
+        try:
+            # validate username
+            username = bundle.data["username"]
+            if User.objects.filter(username=username) and request and request.method in ['GET']:
+                raise CustomBadRequest(
+                    code="duplicate_exception",
+                    message="That username is already used.")
+            # validate user email
+            email = bundle.data["email"]
+            if User.objects.filter(email=email) and request and request.method in ['GET']:
+                raise CustomBadRequest(
+                    code="duplicate_exception",
+                    message="That email is already used.")
+            # validate password
+            validate_password(bundle.data['raw_password'])
+        except KeyError as missing_key:
+            raise CustomBadRequest(
+                code="missing_key",
+                message="Must provide {missing_key} when creating a user."
+                        .format(missing_key=missing_key))
+        except User.DoesNotExist:
+            print 'Error Error'
 
+        return super(UserResource, self).obj_update(bundle, **kwargs)
 
     def hydrate(self, bundle):
-        print 'hydrate UserResource'
+        print 'hydrating UserResource'
         if "raw_password" in bundle.data:
             # Pop out raw_password and validate it
             # This will prevent re-validation because hydrate is called
@@ -158,6 +179,7 @@ class UserResource(ModelResource):
             rp = bundle.data["raw_password"]
             del bundle.data['raw_password']
             bundle.data["password"] = make_password(rp)
+            print 'password included', bundle.data["password"]
             # print bundle.data
         return bundle
 
@@ -174,7 +196,7 @@ class UserResource(ModelResource):
             kwargs['pk'] = request.user.profile.pk
         except:
             print ' >> No profile for this user'
-        return super(UserResource, self).get_detail(request, **kwargs)
+        return super(UserResource, self).get_list(request, **kwargs)
 
     def login(self, request, **kwargs):
         self.method_check(request, allowed=['post'])
@@ -206,6 +228,7 @@ class UserResource(ModelResource):
 
 
 class UserProfileResource(ModelResource):
+    user = fields.ForeignKey('users.resources.UserResource', 'user', full=True)
 
     class Meta:
         queryset = UserProfile.objects.all()
@@ -214,7 +237,7 @@ class UserProfileResource(ModelResource):
         authorization = Authorization()
         always_return_data = True
         allowed_methods = ['get', 'patch', ]
-        detail_allowed_methods = ['get', 'patch', 'put']
+        detail_allowed_methods = ['get', 'put']
         resource_name = 'userprofile'
 
     def dehydrate(self, bundle):
@@ -225,7 +248,36 @@ class UserProfileResource(ModelResource):
         bundle.data['email'] = user.email
         bundle.data['date_joined'] = user.date_joined
         bundle.data['last_login'] = user.last_login
+        if 'user' in bundle.data:
+            del bundle.data['user']
+            print 'deleted key "user"'
         return bundle
+
+    def hydrate(self, bundle):
+        print 'hydrating UserProfileResource'
+        if not 'user' in bundle.data:
+            print 'no user in bundle.data'
+            return bundle
+
+        u = bundle.data['user']
+        # ignore username we don't want to create a new user
+        if 'username' in u:
+            u['username'] = bundle.obj.user.username
+            print 'ignoring username'
+        return bundle
+
+    # def obj_update(self, bundle, request=None, **kwargs):
+    #     print 'UserProfileResource.obj_update'
+    #     bundle = super(UserProfileResource, self).obj_update(bundle, **kwargs)
+    #     print bundle
+    #     if not 'user' in bundle.data:
+    #         return bundle
+    #     u = bundle.data['user']
+    #     bundle.obj.user.first_name = u['first_name']
+    #     bundle.obj.user.last_name = u['last_name']
+    #     bundle.obj.user.email = u['email']
+    #     bundle.obj.save()
+    #     return bundle
 
     def authorized_read_list(self, object_list, bundle):
         # return all objects if super user
