@@ -158,7 +158,7 @@ class UserResource(ModelResource):
         except KeyError as missing_key:
             raise CustomBadRequest(
                 code="missing_key",
-                message="Must provide {missing_key} when creating a user."
+                message="Must provide {missing_key}."
                         .format(missing_key=missing_key))
         except User.DoesNotExist:
             print 'Error Error'
