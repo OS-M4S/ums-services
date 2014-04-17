@@ -25,7 +25,7 @@ DEBUG = localhost() == 'su-precise'
 
 TEMPLATE_DEBUG = True
 
-ALLOWED_HOSTS = ['localhost','su-precise']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
