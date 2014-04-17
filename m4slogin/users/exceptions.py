@@ -10,9 +10,9 @@ class CustomBadRequest(TastypieError):
     """
 
     def __init__(self, code="", message=""):
-        self._response = {
-            "error": {"code": code or "not_provided",
-                      "message": message or "No error message was provided."}}
+        # {"error": 
+        self._response = {"success": "false",  "code": code or "na", "message": message or "Sorry, an unknown error occurred!"}
+        # }
 
     @property
     def response(self):

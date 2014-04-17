@@ -47,6 +47,7 @@ class CreateUserResource(ModelResource):
 
     def hydrate(self, bundle):
         print 'hydrate CreateUserResource'
+        # validate fields
         REQUIRED_USER_PROFILE_FIELDS = ( "gender", "user")
         for field in REQUIRED_USER_PROFILE_FIELDS:
             if field not in bundle.data:
@@ -58,7 +59,8 @@ class CreateUserResource(ModelResource):
         REQUIRED_USER_FIELDS = ("username", "email", "first_name", "last_name",
                                 "raw_password")
         for field in REQUIRED_USER_FIELDS:
-            if field not in bundle.data["user"]:
+            if field not in bundle.data['user']:
+                print field
                 raise CustomBadRequest(
                     code="missing_key",
                     message="Must provide {missing_key} when creating a user."
@@ -66,26 +68,29 @@ class CreateUserResource(ModelResource):
         return bundle
 
     def obj_create(self, bundle, **kwargs):
-        # try:
-        #     # validate username
-        #     username = bundle.data["user"]["username"]
-        #     if User.objects.filter(username=username):
-        #         raise CustomBadRequest(
-        #             code="duplicate_exception",
-        #             message="That username is already used.")
-        #     # validate user email
-        #     email = bundle.data["user"]["email"]
-        #     if User.objects.filter(email=email):
-        #         raise CustomBadRequest(
-        #             code="duplicate_exception",
-        #             message="That email is already used.")
-        # except KeyError as missing_key:
-        #     raise CustomBadRequest(
-        #         code="missing_key",
-        #         message="Must provide {missing_key} when creating a user."
-        #                 .format(missing_key=missing_key))
-        # except User.DoesNotExist:
-        #     print 'Error Error'
+        print 'obj_create'
+        try:
+            # validate password
+            validate_password(bundle.data['user']['raw_password'])
+            # validate username
+            username = bundle.data["user"]["username"]
+            if User.objects.filter(username=username):
+                raise CustomBadRequest(
+                    code="duplicate_exception",
+                    message="That username is already used.")
+            # validate user email
+            email = bundle.data["user"]["email"]
+            if User.objects.filter(email=email):
+                raise CustomBadRequest(
+                    code="duplicate_exception",
+                    message="That email is already used.")
+        except KeyError as missing_key:
+            raise CustomBadRequest(
+                code="missing_key",
+                message="Must provide {missing_key} when creating a user."
+                        .format(missing_key=missing_key))
+        except User.DoesNotExist:
+            print 'Error Error'
         # setting resource_name to `user_profile` here because we want
         # resource_uri in response to be same as UserProfileResource resource
         self._meta.resource_name = UserProfileResource._meta.resource_name
@@ -95,6 +100,7 @@ class CreateUserResource(ModelResource):
 ################################################################################
 
 def validate_password(password):
+    print 'validate_password'
     if re.match(REGEX_VALID_PASSWORD, password):
         return True
     # Todo fix this
@@ -103,12 +109,10 @@ def validate_password(password):
             code="invalid_password",
             message=(
                 "Your password should contain at least {length} "
-                "characters.".format(length=MINIMUM_PASSWORD_LENGTH)))
+                "characters (at least one number, one uppercase letter, one special character and no spaces)".format(length=MINIMUM_PASSWORD_LENGTH)))
     raise CustomBadRequest(
         code="invalid_password",
-        message=("Your password should contain at least one number"
-                 ", one uppercase letter, one special character,"
-                 " and no spaces."))
+        message=("Your password should contain at least one number, one uppercase letter, one special character and no spaces."))
     return False
 
 ################################################################################
@@ -141,6 +145,7 @@ class UserResource(ModelResource):
 
     def obj_update(self, bundle, request=None, **kwargs):
         try:
+            print 'obj_update', bundle.data
             # validate username
             username = bundle.data["username"]
             if User.objects.filter(username=username) and request and request.method in ['GET']:
@@ -153,9 +158,10 @@ class UserResource(ModelResource):
                 raise CustomBadRequest(
                     code="duplicate_exception",
                     message="That email is already used.")
-            # validate password
-            validate_password(bundle.data['raw_password'])
+            # # validate password
+            # print validate_password(bundle.data['raw_password'])
         except KeyError as missing_key:
+            print 'KeyError'
             raise CustomBadRequest(
                 code="missing_key",
                 message="Must provide {missing_key}."
